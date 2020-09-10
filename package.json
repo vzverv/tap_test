@@ -1,0 +1,26 @@
+{
+  "name": "tap_test",
+  "version": "1.0.0",
+  "description": "test task for tap canada",
+  "main": "index.js",
+  "engines": {
+    "node": "12.16.1"
+  },
+  "scripts": {
+    "start": "node app.js",
+    "enter-mysql": "docker exec -ti tap_test_tap-mysql_1 bash",
+    "enter-node": "docker exec -ti tap_test_tap-node_1",
+    "exec-in-docker": "docker exec -ti tap_test_tap-node_1 npm run start",
+    "build": "tsc app.ts",
+    "watch": "tsc --watch app.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Vitalii Dmytruk",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "14.6.4",
+    "csvtojson": "2.0.10",
+    "ftp": "0.3.10",
+    "mysql": "2.18.1"
+  }
+}

@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+    tap-mysql:
+        image: mysql:5.7
+        volumes:
+            - ./storage/docker/mysql:/var/lib/mysql
+            - ./data:/tmp/data
+        environment:
+            - "MYSQL_ROOT_PASSWORD=secret"
+            - "MYSQL_USER=app"
+            - "MYSQL_PASSWORD=secret"
+            - "MYSQL_DATABASE=tap"
+        ports:
+            - "33061:3306"
+    tap-node:
+        build: .
+        volumes:
+            - ./:/home/node/app
+        links:
+            - tap-mysql
