@@ -40,6 +40,17 @@ var FTP = require('ftp');
 var promisify = require('util').promisify;
 var csv = require('csvtojson');
 var mysql = require('mysql');
+var winston = require("winston");
+var logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.simple(),
+    transports: [new winston.transports.Console()]
+});
+/**
+ * Output data as a table to console.
+ * @param header
+ * @param data
+ */
 function outputConsoleTable(header, data) {
     console.info(header);
     console.table(data);
@@ -77,6 +88,18 @@ function retriveDataFromFTP(dataFiles, getFileFromFTP) {
         });
     });
 }
+/**
+ * Prepare init array for aggregation.
+ * @param givenDates
+ */
+function prepareDataArray(givenDates) {
+    var aggregator = []; // aggregate data
+    //let's prepare the dates we need
+    givenDates.forEach(function (el) {
+        aggregator[el] = [];
+    });
+    return aggregator;
+}
 /******** NOTE ********/
 /*
     Next 2 pairs of functions look very similar, so the DRY violance is looking pretty obivous
@@ -89,15 +112,10 @@ function retriveDataFromFTP(dataFiles, getFileFromFTP) {
  * @param dataFromFiles
  * @param givenDates
  */
-function buildCampaignData(dataFromFiles, givenDates) {
+function buildCampaignData(dataFromFiles, campaignData) {
     return __awaiter(this, void 0, void 0, function () {
-        var campaignData, _i, dataFromFiles_1, data;
+        var _i, dataFromFiles_1, data;
         return __generator(this, function (_a) {
-            campaignData = [];
-            //let's prepare the dates we need
-            givenDates.forEach(function (el) {
-                campaignData[el] = [];
-            });
             // Campaign data view
             // campaign_id | campaign_name | date | total_impressions
             for (_i = 0, dataFromFiles_1 = dataFromFiles; _i < dataFromFiles_1.length; _i++) {
@@ -117,15 +135,10 @@ function buildCampaignData(dataFromFiles, givenDates) {
  * @param dataFromFiles
  * @param givenDates
  */
-function buildCreativeData(dataFromFiles, givenDates) {
+function buildCreativeData(dataFromFiles, creativeData) {
     return __awaiter(this, void 0, void 0, function () {
-        var creativeData, _i, dataFromFiles_2, data;
+        var _i, dataFromFiles_2, data;
         return __generator(this, function (_a) {
-            creativeData = [];
-            //let's prepare the dates we need
-            givenDates.forEach(function (el) {
-                creativeData[el] = [];
-            });
             // Creative data view
             for (_i = 0, dataFromFiles_2 = dataFromFiles; _i < dataFromFiles_2.length; _i++) {
                 data = dataFromFiles_2[_i];
@@ -191,9 +204,9 @@ function prepareCreativeData(creativeData) {
 /**
  * Main workflow.
  */
-function handler() {
+function handler(givenDates) {
     return __awaiter(this, void 0, void 0, function () {
-        var ftpClient, onEvent, listFiles, filesList, givenDates, filterValues, fileNames, advertisersFile, getFileFromFTP, stream, advertisers, dataFiles, dataFromFiles, campaignData, creativeData, finalCampaignTable, finalCreativeTable, _i, givenDates_1, date, connection;
+        var ftpClient, onEvent, listFiles, filesList, filterValues, fileNames, advertisersFile, getFileFromFTP, stream, advertisers, dataFiles, dataFromFiles, campaignData, creativeData, finalCampaignTable, finalCreativeTable, _i, givenDates_1, date, connection;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -205,9 +218,9 @@ function handler() {
                     });
                     onEvent = promisify(ftpClient.on).bind(ftpClient);
                     return [4 /*yield*/, onEvent('ready').then(function () {
-                            console.log('ftp is ready');
+                            logger.info('ftp is ready');
                         })["catch"](function (e) {
-                            console.log('error, the ftp is not ready :(', e);
+                            logger.error('error, the ftp is not ready :(', e);
                         })];
                 case 1:
                     _a.sent();
@@ -215,7 +228,6 @@ function handler() {
                     return [4 /*yield*/, listFiles()];
                 case 2:
                     filesList = _a.sent();
-                    givenDates = ['2016-05-05', '2016-05-06'];
                     filterValues = givenDates;
                     filterValues.push('Advertisers');
                     fileNames = filesList.filter(function (el) {
@@ -242,10 +254,10 @@ function handler() {
                     return [4 /*yield*/, retriveDataFromFTP(dataFiles, getFileFromFTP)];
                 case 5:
                     dataFromFiles = _a.sent();
-                    return [4 /*yield*/, buildCampaignData(dataFromFiles, givenDates)];
+                    return [4 /*yield*/, buildCampaignData(dataFromFiles, prepareDataArray(givenDates))];
                 case 6:
                     campaignData = _a.sent();
-                    return [4 /*yield*/, buildCreativeData(dataFromFiles, givenDates)];
+                    return [4 /*yield*/, buildCreativeData(dataFromFiles, prepareDataArray(givenDates))];
                 case 7:
                     creativeData = _a.sent();
                     finalCampaignTable = [];
@@ -257,19 +269,24 @@ function handler() {
                     }
                     outputConsoleTable('Campaign data', finalCampaignTable);
                     outputConsoleTable('Creatives data', finalCreativeTable);
-                    connection = mysql.createConnection({
-                        host: 'tap-mysql',
-                        port: '3306',
-                        user: 'app',
-                        password: 'secret',
-                        database: 'tap'
-                    });
-                    connection.connect(function () {
-                        console.log('connected to mysql');
-                    });
-                    connection.end(function () {
-                        console.log('mysql connection closed');
-                    });
+                    // Creatives data view
+                    // creative_id | creative_name | campaign_id, date, totali_mpressions
+                    // mysql connection
+                    if (false) { // we do not need mysql for this implementationS
+                        connection = mysql.createConnection({
+                            host: 'tap-mysql',
+                            port: '3306',
+                            user: 'app',
+                            password: 'secret',
+                            database: 'tap'
+                        });
+                        connection.connect(function () {
+                            logger.info('connected to mysql');
+                        });
+                        connection.end(function () {
+                            logger.info('mysql connection closed');
+                        });
+                    }
                     ftpClient.end();
                     return [2 /*return*/];
             }
@@ -277,4 +294,4 @@ function handler() {
     });
 }
 exports.handler = handler;
-handler();
+handler(['2016-05-05', '2016-05-06']);

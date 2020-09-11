@@ -4,50 +4,22 @@ const FTP = require('ftp');
 const { promisify } = require('util');
 const csv = require('csvtojson');
 const mysql = require('mysql');
+import * as winston from 'winston';
+import {FTPList, CampaignData, CampaignDataAggregated, CreativeData, CreativeDataAggregated} from './tap';
 
-interface FTPList {
-    type: string,
-    name: string,
-    target?: string,
-    sticky: boolean,
-    rights: object,
-    acl: boolean,
-    owner: string,
-    group: string,
-    size: number,
-    date: string,
-}
+const logger = winston.createLogger(
+    {
+        level: 'info',
+        format: winston.format.simple(),
+        transports: [new winston.transports.Console()]
+    }
+);
 
-interface CampaignData {
-    campaign_id: string,
-    campaign_name: string,
-    date: string,
-    impressions: number,
-}
-
-interface CampaignDataAggregated {
-    campaign_id: string,
-    campaign_name: string,
-    date: string,
-    total_impressions: number,
-}
-
-interface CreativeData {
-    creative_id: string,
-    creative_name: string,
-    campaign_id: string,
-    date: string,
-    impressions: number,
-}
-
-interface CreativeDataAggregated {
-    creative_id: string,
-    creative_name: string,
-    campaign_id: string,
-    date: string,
-    total_impressions: number,
-}
-
+/**
+ * Output data as a table to console.
+ * @param header 
+ * @param data 
+ */
 function outputConsoleTable(header: string, data: any) {
     console.info(header);
     console.table(data);
@@ -68,6 +40,20 @@ async function retriveDataFromFTP(dataFiles, getFileFromFTP) {
     return dataFromFiles;
 }
 
+/**
+ * Prepare init array for aggregation.
+ * @param givenDates 
+ */
+function prepareDataArray(givenDates: string[]){
+    let aggregator = []; // aggregate data
+    //let's prepare the dates we need
+    givenDates.forEach(el => {
+        aggregator[el] = [];
+    });
+
+    return aggregator;
+}
+
 /******** NOTE ********/
 /*
     Next 2 pairs of functions look very similar, so the DRY violance is looking pretty obivous
@@ -81,12 +67,7 @@ async function retriveDataFromFTP(dataFiles, getFileFromFTP) {
  * @param dataFromFiles 
  * @param givenDates 
  */
-async function buildCampaignData(dataFromFiles, givenDates) {
-    let campaignData = []; // aggregate data
-    //let's prepare the dates we need
-    givenDates.forEach(el => {
-        campaignData[el] = [];
-    });
+async function buildCampaignData(dataFromFiles: any, campaignData: any[]) {
     // Campaign data view
     // campaign_id | campaign_name | date | total_impressions
     for (const data of dataFromFiles) {
@@ -104,12 +85,7 @@ async function buildCampaignData(dataFromFiles, givenDates) {
  * @param dataFromFiles 
  * @param givenDates 
  */
-async function buildCreativeData(dataFromFiles: any, givenDates: string[]) {
-    let creativeData = []; // aggregate data
-    //let's prepare the dates we need
-    givenDates.forEach(el => {
-        creativeData[el] = [];
-    });
+async function buildCreativeData(dataFromFiles: any, creativeData: any[]) {
     // Creative data view
     for (const data of dataFromFiles) {
         creativeData[data.Date].push(<CreativeData>{
@@ -185,7 +161,7 @@ function prepareCreativeData(creativeData: CreativeData[]) {
 /**
  * Main workflow.
  */
-export async function handler() {
+export async function handler(givenDates: string[]) {
 
     const ftpClient = new FTP();
 
@@ -198,20 +174,19 @@ export async function handler() {
     const onEvent = promisify(ftpClient.on).bind(ftpClient);
 
     await onEvent('ready').then(() => {
-        console.log('ftp is ready');
+        logger.info('ftp is ready');
     }).catch((e) => {
-        console.log('error, the ftp is not ready :(', e);
+        logger.error('error, the ftp is not ready :(', e);
     });
 
     const listFiles = promisify(ftpClient.list).bind(ftpClient);
     const filesList = await listFiles();
-    // let's imagine we received it as an external parameter
-    const givenDates = ['2016-05-05', '2016-05-06'];
+    
     const filterValues = givenDates;
     filterValues.push('Advertisers');
     // filter values - we need only advertiser and everything for May 5,6
     const fileNames = filesList.filter((el: FTPList) => {
-        return filterValues.some(value => el.name.includes(value)) ;
+        return filterValues.some(value => el.name.includes(value));
     });
 
     // grab adevertisers file
@@ -236,9 +211,8 @@ export async function handler() {
 
     const dataFromFiles = await retriveDataFromFTP(dataFiles, getFileFromFTP);
 
-    const campaignData = await buildCampaignData(dataFromFiles, givenDates);
-
-    const creativeData = await buildCreativeData(dataFromFiles, givenDates);
+    const campaignData = await buildCampaignData(dataFromFiles, prepareDataArray(givenDates));
+    const creativeData = await buildCreativeData(dataFromFiles, prepareDataArray(givenDates));
 
     let finalCampaignTable: CampaignDataAggregated[] = [];
     let finalCreativeTable: CreativeDataAggregated[] = [];
@@ -247,31 +221,32 @@ export async function handler() {
         finalCreativeTable = finalCreativeTable.concat(prepareCreativeData(creativeData[date]));
     }
 
-
     outputConsoleTable('Campaign data', finalCampaignTable);
     outputConsoleTable('Creatives data', finalCreativeTable);
 
     // Creatives data view
     // creative_id | creative_name | campaign_id, date, totali_mpressions
 
-    // mysql connection{
-    const connection = mysql.createConnection({
-        host: 'tap-mysql',
-        port: '3306',
-        user: 'app',
-        password: 'secret',
-        database: 'tap',
-    });
+    // mysql connection
+    if (false) { // we do not need mysql for this implementationS
+        const connection = mysql.createConnection({
+            host: 'tap-mysql',
+            port: '3306',
+            user: 'app',
+            password: 'secret',
+            database: 'tap',
+        });
 
-    connection.connect(() => {
-        console.log('connected to mysql');
-    });
+        connection.connect(() => {
+            logger.info('connected to mysql');
+        });
 
-    connection.end(() => {
-        console.log('mysql connection closed');
-    });
+        connection.end(() => {
+            logger.info('mysql connection closed');
+        });
+    }
 
     ftpClient.end();
 }
 
-handler();
+handler(['2016-05-05', '2016-05-06']);
