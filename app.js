@@ -59,8 +59,9 @@ function outputConsoleTable(header, data) {
 /**
  * @param dataFiles
  * @param getFileFromFTP
+ * @param advertisersIDs
  */
-function retriveDataFromFTP(dataFiles, getFileFromFTP) {
+function retrieveDataFromFTP(dataFiles, getFileFromFTP, advertisersIDs) {
     return __awaiter(this, void 0, void 0, function () {
         var dataFromFiles, _i, dataFiles_1, fileData, stream, _a, _b;
         return __generator(this, function (_c) {
@@ -83,7 +84,11 @@ function retriveDataFromFTP(dataFiles, getFileFromFTP) {
                 case 4:
                     _i++;
                     return [3 /*break*/, 1];
-                case 5: return [2 /*return*/, dataFromFiles];
+                case 5:
+                    dataFromFiles = dataFromFiles.filter(function (el) {
+                        return advertisersIDs.some(function (value) { return el['Advertiser ID'].includes(value); });
+                    });
+                    return [2 /*return*/, dataFromFiles];
             }
         });
     });
@@ -206,7 +211,7 @@ function prepareCreativeData(creativeData) {
  */
 function handler(givenDates) {
     return __awaiter(this, void 0, void 0, function () {
-        var ftpClient, onEvent, listFiles, filesList, filterValues, fileNames, advertisersFile, getFileFromFTP, stream, advertisers, dataFiles, dataFromFiles, campaignData, creativeData, finalCampaignTable, finalCreativeTable, _i, givenDates_1, date, connection;
+        var ftpClient, onEvent, listFiles, filesList, filterValues, fileNames, advertisersFile, getFileFromFTP, stream, advertisers, dataFiles, advertisersIDs, dataFromFiles, campaignData, creativeData, finalCampaignTable, finalCreativeTable, _i, givenDates_1, date, connection;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -251,7 +256,10 @@ function handler(givenDates) {
                     if (!dataFiles) {
                         throw Error('No files to process.');
                     }
-                    return [4 /*yield*/, retriveDataFromFTP(dataFiles, getFileFromFTP)];
+                    advertisersIDs = advertisers.map(function (el) {
+                        return el['Advertiser ID'];
+                    });
+                    return [4 /*yield*/, retrieveDataFromFTP(dataFiles, getFileFromFTP, advertisersIDs)];
                 case 5:
                     dataFromFiles = _a.sent();
                     return [4 /*yield*/, buildCampaignData(dataFromFiles, prepareDataArray(givenDates))];

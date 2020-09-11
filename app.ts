@@ -28,14 +28,19 @@ function outputConsoleTable(header: string, data: any) {
 /**
  * @param dataFiles 
  * @param getFileFromFTP 
+ * @param advertisersIDs
  */
-async function retriveDataFromFTP(dataFiles, getFileFromFTP) {
+async function retrieveDataFromFTP(dataFiles, getFileFromFTP, advertisersIDs: string[]) {
     let dataFromFiles = [];
     //loop over file names, stream data from csv files to json objects
     for (const fileData of dataFiles) {
         const stream = await getFileFromFTP(fileData.name);
         dataFromFiles = dataFromFiles.concat(await csv().fromStream(stream));
     }
+
+    dataFromFiles = dataFromFiles.filter((el: string[]) => {
+        return advertisersIDs.some(value => el['Advertiser ID'].includes(value));
+    });
 
     return dataFromFiles;
 }
@@ -209,7 +214,11 @@ export async function handler(givenDates: string[]) {
         throw Error('No files to process.');
     }
 
-    const dataFromFiles = await retriveDataFromFTP(dataFiles, getFileFromFTP);
+    const advertisersIDs = advertisers.map(el=> { 
+        return el['Advertiser ID'];
+    });
+
+    const dataFromFiles = await retrieveDataFromFTP(dataFiles, getFileFromFTP, advertisersIDs);
 
     const campaignData = await buildCampaignData(dataFromFiles, prepareDataArray(givenDates));
     const creativeData = await buildCreativeData(dataFromFiles, prepareDataArray(givenDates));
